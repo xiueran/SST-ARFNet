@@ -247,37 +247,6 @@ class AdaptiveResidualFusion(nn.Module):
         return self.dropout(fused)
 
 
-class BinaryGuidedHead(nn.Module):
-    def __init__(self, ch, num_classes, dropout=0.05, guide_scale=1.0):
-        super().__init__()
-        self.num_classes = int(num_classes)
-        self.guide_scale = float(guide_scale)
-        self.binary = nn.Sequential(
-            ResidualDWBlock(ch, dropout=dropout),
-            nn.Conv2d(ch, 2, kernel_size=1),
-        )
-        self.multi = nn.Sequential(
-            ResidualDWBlock(ch, dropout=dropout),
-            ConvBNAct(ch, ch, kernel_size=1, dropout=dropout),
-            nn.Conv2d(ch, num_classes, kernel_size=1),
-        )
-
-    def forward(self, x):
-        logits = self.multi(x)
-        if self.num_classes <= 1:
-            return logits
-
-        bin_logits = self.binary(x)
-        bin_prob = torch.softmax(bin_logits, dim=1)
-        no_change = bin_prob[:, 0:1]
-        change = bin_prob[:, 1:2]
-
-        guided = logits.clone()
-        guided[:, 0:1] = guided[:, 0:1] + self.guide_scale * torch.log(no_change.clamp_min(1e-6))
-        guided[:, 1:] = guided[:, 1:] + self.guide_scale * torch.log(change.clamp_min(1e-6))
-        return guided
-
-
 class MulticlassHead(nn.Module):
     def __init__(self, ch, num_classes, dropout=0.05):
         super().__init__()
